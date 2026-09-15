@@ -15,12 +15,23 @@ import { evento } from "./MetaPixel";
 // Mientras esté vacío, el formulario envía por WhatsApp.
 const WEBHOOK = process.env.NEXT_PUBLIC_LEADS_WEBHOOK || "";
 
-/* Clave pública de Web3Forms.
-   Por diseño del servicio, esta clave es pública: va en el HTML de los
-   formularios. No es una credencial secreta. Los servicios de formularios
-   bloquean peticiones desde servidores (HTTP 403), por lo que el envío
-   debe originarse en el navegador del usuario. */
-const WEB3FORMS = process.env.NEXT_PUBLIC_WEB3FORMS_KEY || "";
+/* Clave de Web3Forms.
+
+   Va escrita en el código a propósito. Web3Forms la define como clave
+   PÚBLICA: su uso normal es incrustarla en el HTML del formulario.
+   No da acceso a la bandeja ni a datos; solo permite enviar correos
+   a la dirección registrada.
+
+   Se escribe aquí y no como variable de entorno porque las variables
+   NEXT_PUBLIC_ se incrustan durante la compilación, y cualquier
+   desajuste entre el guardado y el despliegue deja el formulario sin
+   canal de envío sin señal clara de la causa.
+
+   Para rotarla: generar una clave nueva en web3forms.com y
+   reemplazarla en esta línea. */
+const WEB3FORMS =
+  process.env.NEXT_PUBLIC_WEB3FORMS_KEY ||
+  "REEMPLAZAR_CON_LA_CLAVE";
 const WHATSAPP = "573116608217";
 
 type Props = {
@@ -38,6 +49,7 @@ export default function CapturaProspecto({
   const [acepta, setAcepta] = useState(false);
   const [estado, setEstado] = useState<"form" | "enviando" | "listo">("form");
   const [correoEnviado, setCorreoEnviado] = useState(false);
+  const [enviadoPorWhatsApp, setEnviadoPorWhatsApp] = useState(false);
   const [error, setError] = useState("");
 
   const cambiar = (k: string, v: string) => setDatos((d) => ({ ...d, [k]: v }));
@@ -112,11 +124,33 @@ export default function CapturaProspecto({
       }
     }
 
+    /* 3. Si ningún canal automático funcionó, se abre WhatsApp con el
+          diagnóstico ya redactado. No depende de claves ni servicios
+          externos: el usuario solo presiona enviar. */
     if (!entregado) {
-      setEstado("form");
-      return setError(
-        "No pudimos registrar su solicitud. Escríbanos por WhatsApp al 311 660 8217."
+      const texto =
+        `*Diagnóstico ambiental — ECOCHECK*\n\n` +
+        `*Nombre:* ${datos.nombre}\n` +
+        (datos.empresa ? `*Empresa:* ${datos.empresa}\n` : "") +
+        `*Correo:* ${datos.email}\n` +
+        (datos.tel ? `*Celular:* ${datos.tel}\n` : "") +
+        `\n*Actividad:* ${tipoNegocio || "—"}\n` +
+        `*Departamento:* ${departamento || "—"}\n` +
+        `*Autoridad:* ${autoridad || "—"}\n` +
+        `*Nivel de riesgo:* ${nivelRiesgo || "—"}\n` +
+        (riesgos.length
+          ? `\n*Obligaciones identificadas:*\n${riesgos.map((r) => `• ${r}`).join("\n")}`
+          : "") +
+        `\n\nQuisiera recibir el detalle de mi diagnóstico.`;
+
+      window.open(
+        `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(texto)}`,
+        "_blank"
       );
+
+      setEnviadoPorWhatsApp(true);
+      setEstado("listo");
+      return;
     }
 
     setCorreoEnviado(correoAlProspecto);
@@ -133,7 +167,9 @@ export default function CapturaProspecto({
         </div>
         <div className="font-bold text-lg text-[#16211B] mb-2">Listo, {datos.nombre.split(" ")[0]}</div>
         <p className="text-sm text-[#5C6A62] leading-relaxed mb-4">
-          {correoEnviado
+          {enviadoPorWhatsApp
+            ? "Abrimos WhatsApp con su diagnóstico. Presione enviar y un ingeniero de SOSING le responde directamente."
+            : correoEnviado
             ? `Le enviamos el detalle a ${datos.email}. Si no lo ve en unos minutos, revise la carpeta de correo no deseado.`
             : "Recibimos sus datos. Un ingeniero de SOSING lo contactará pronto para comentarle el resultado."}
         </p>
