@@ -232,3 +232,66 @@ export function mensajeCotizacion(
     `Quisiera conocer el alcance y el valor definitivo.`
   );
 }
+
+
+/* ══════════════════════════════════════════════════════════════
+   ENVÍO DE LA SOLICITUD DE COTIZACIÓN
+
+   No depende de que el usuario presione enviar en WhatsApp.
+   El envío ocurre al presionar el botón.
+   ══════════════════════════════════════════════════════════════ */
+
+const WEB3FORMS =
+  process.env.NEXT_PUBLIC_WEB3FORMS_KEY || "REEMPLAZAR_CON_LA_CLAVE";
+
+export type DatosSolicitante = {
+  nombre?: string;
+  empresa?: string;
+  email?: string;
+  telefono?: string;
+  tipoNegocio?: string;
+  departamento?: string;
+  autoridad?: string;
+  nivelRiesgo?: string;
+  obligaciones?: string[];
+};
+
+export async function enviarSolicitudCotizacion(
+  c: Cotizacion,
+  d: DatosSolicitante
+): Promise<boolean> {
+  const servicios = c.lineas
+    .map((l) => `${l.servicio.nombre} (desde ${pesos(l.servicio.desde)})`)
+    .join(" | ");
+
+  try {
+    const r = await fetch("https://api.web3forms.com/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        access_key: WEB3FORMS,
+        subject: `COTIZACIÓN · ${d.nombre || "Sin nombre"} · ${pesos(c.desde)}`,
+        from_name: "ECOCHECK — Solicitud de cotización",
+        "— SOLICITUD —": "Cotización de servicios",
+        Nombre: d.nombre || "No suministrado",
+        Empresa: d.empresa || "—",
+        Correo: d.email || "No suministrado",
+        Celular: d.telefono || "No suministrado",
+        "— DIAGNÓSTICO —": "",
+        Actividad: d.tipoNegocio || "—",
+        Departamento: d.departamento || "—",
+        Autoridad: d.autoridad || "—",
+        Riesgo: d.nivelRiesgo || "—",
+        Obligaciones: (d.obligaciones || []).join(" | ") || "—",
+        "— COTIZACIÓN —": "",
+        Servicios: servicios,
+        Valor_desde: pesos(c.desde),
+        Plazo: c.plazoEstimado,
+      }),
+    });
+    const j = await r.json().catch(() => null);
+    return Boolean(r.ok && j?.success);
+  } catch {
+    return false;
+  }
+}

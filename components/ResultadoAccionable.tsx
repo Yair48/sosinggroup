@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import {
-  cotizar, mensajeCotizacion, SUSCRIPCION, pesos as $,
+  cotizar, mensajeCotizacion, enviarSolicitudCotizacion,
+  SUSCRIPCION, pesos as $,
 } from "@/lib/ecocheck-cotizacion";
 import {
   clasificarGeneradorRespel, explicarClasificacion,
@@ -47,6 +48,13 @@ export default function ResultadoAccionable(p: Props) {
 
   const aut = datosAutoridad(p.autoridad);
   const nivelRiesgoTexto = p.nivelRiesgo || "MEDIO";
+
+  /* Solicitud de cotización */
+  const [pidiendo, setPidiendo] = useState(false);
+  const [solicitado, setSolicitado] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [errSol, setErrSol] = useState("");
+  const [sol, setSol] = useState({ nombre: "", empresa: "", email: "", tel: "" });
 
   /* Con bitácora se usa el motor real. Sin ella, el puente declarativo. */
   const usaMotor = p.generaRespel && p.registros.length > 0;
@@ -376,19 +384,106 @@ export default function ResultadoAccionable(p: Props) {
                 </div>
               </div>
 
-              <a href={wa} target="_blank" rel="noopener noreferrer"
-                style={{
-                  display: "block", background: "#25D366", color: "#fff",
-                  padding: "15px", borderRadius: 8, textAlign: "center",
-                  fontSize: 15.5, fontWeight: 700, textDecoration: "none",
-                  marginBottom: 10,
+              {solicitado ? (
+                <div style={{
+                  background: C.verdeFondo, border: "1px solid #CBE0D3",
+                  borderRadius: 8, padding: "16px 18px", textAlign: "center",
                 }}>
-                Solicitar cotización por WhatsApp
-              </a>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.verde, marginBottom: 6 }}>
+                    Solicitud recibida
+                  </div>
+                  <p style={{ fontSize: 13.5, color: C.gris, lineHeight: 1.6, margin: "0 0 12px" }}>
+                    Un ingeniero de SOSING le responde con el alcance y el valor
+                    definitivo. Si prefiere adelantar, escríbanos directamente.
+                  </p>
+                  <a href={wa} target="_blank" rel="noopener noreferrer"
+                    style={{
+                      display: "inline-block", background: "#25D366", color: "#fff",
+                      padding: "11px 22px", borderRadius: 7, fontSize: 14,
+                      fontWeight: 700, textDecoration: "none",
+                    }}>
+                    Escribir por WhatsApp
+                  </a>
+                </div>
+              ) : !pidiendo ? (
+                <>
+                  <button onClick={() => setPidiendo(true)}
+                    style={{
+                      width: "100%", background: C.verde, color: "#fff",
+                      border: "none", padding: "15px", borderRadius: 8,
+                      fontSize: 15.5, fontWeight: 700, cursor: "pointer",
+                      fontFamily: "inherit", marginBottom: 10,
+                    }}>
+                    Solicitar cotización
+                  </button>
+                  <p style={{ fontSize: 12.5, color: C.grisClaro, textAlign: "center", margin: 0 }}>
+                    Sin costo. Le responde un ingeniero, no un contestador
+                  </p>
+                </>
+              ) : (
+                <div style={{
+                  border: `1px solid ${C.linea}`, borderRadius: 8, padding: "16px 18px",
+                }}>
+                  <div style={{ fontSize: 14.5, fontWeight: 700, marginBottom: 4 }}>
+                    ¿A quién le respondemos?
+                  </div>
+                  <p style={{ fontSize: 13, color: C.gris, lineHeight: 1.5, margin: "0 0 14px" }}>
+                    Con estos datos le enviamos el alcance detallado.
+                  </p>
 
-              <p style={{ fontSize: 12.5, color: C.grisClaro, textAlign: "center", margin: 0 }}>
-                Le responde un ingeniero, no un contestador automático
-              </p>
+                  {["nombre", "empresa", "email", "tel"].map((campo) => (
+                    <input key={campo}
+                      type={campo === "email" ? "email" : campo === "tel" ? "tel" : "text"}
+                      inputMode={campo === "tel" ? "tel" : undefined}
+                      placeholder={
+                        campo === "nombre" ? "Su nombre" :
+                        campo === "empresa" ? "Empresa (opcional)" :
+                        campo === "email" ? "Correo" : "Celular"
+                      }
+                      value={(sol as any)[campo]}
+                      onChange={(e) => { setSol({ ...sol, [campo]: e.target.value }); setErrSol(""); }}
+                      style={{
+                        width: "100%", padding: "12px 13px", fontSize: 15,
+                        border: `1px solid ${C.linea}`, borderRadius: 7,
+                        marginBottom: 9, fontFamily: "inherit", color: C.tinta,
+                      }}
+                    />
+                  ))}
+
+                  {errSol && (
+                    <div style={{ fontSize: 13, color: C.rojo, marginBottom: 10 }}>{errSol}</div>
+                  )}
+
+                  <button
+                    disabled={enviando}
+                    onClick={async () => {
+                      if (!sol.nombre.trim()) return setErrSol("Escriba su nombre.");
+                      if (!sol.email.includes("@")) return setErrSol("Escriba un correo válido.");
+                      setEnviando(true);
+                      const ok = await enviarSolicitudCotizacion(cot, {
+                        nombre: sol.nombre, empresa: sol.empresa,
+                        email: sol.email, telefono: sol.tel,
+                        departamento: p.departamento, autoridad: aut.sigla,
+                        nivelRiesgo: nivelRiesgoTexto,
+                        obligaciones: obligaciones.map((o) => o.titulo),
+                      });
+                      setEnviando(false);
+                      if (ok) { setSolicitado(true); }
+                      else {
+                        window.open(wa, "_blank");
+                        setSolicitado(true);
+                      }
+                    }}
+                    style={{
+                      width: "100%", background: enviando ? C.gris : C.verde,
+                      color: "#fff", border: "none", padding: "14px",
+                      borderRadius: 8, fontSize: 15, fontWeight: 700,
+                      cursor: enviando ? "default" : "pointer", fontFamily: "inherit",
+                    }}>
+                    {enviando ? "Enviando…" : "Enviar solicitud"}
+                  </button>
+                </div>
+              )}
 
               {/* Suscripción */}
               {cot.incluyeSuscripcion && (
