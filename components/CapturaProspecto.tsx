@@ -14,6 +14,13 @@ import { evento } from "./MetaPixel";
 // Pegue aquí la URL del webhook de Zapier cuando lo tenga.
 // Mientras esté vacío, el formulario envía por WhatsApp.
 const WEBHOOK = process.env.NEXT_PUBLIC_LEADS_WEBHOOK || "";
+
+/* Clave pública de Web3Forms.
+   Por diseño del servicio, esta clave es pública: va en el HTML de los
+   formularios. No es una credencial secreta. Los servicios de formularios
+   bloquean peticiones desde servidores (HTTP 403), por lo que el envío
+   debe originarse en el navegador del usuario. */
+const WEB3FORMS = process.env.NEXT_PUBLIC_WEB3FORMS_KEY || "";
 const WHATSAPP = "573116608217";
 
 type Props = {
@@ -43,40 +50,77 @@ export default function CapturaProspecto({
     setError("");
     setEstado("enviando");
 
+    const payload = {
+      nombre: datos.nombre,
+      empresa: datos.empresa,
+      email: datos.email,
+      telefono: datos.tel,
+      tipoNegocio,
+      departamento,
+      autoridad,
+      nivelRiesgo,
+      riesgos,
+    };
+
+    let entregado = false;
+    let correoAlProspecto = false;
+
+    /* 1. Intento por el servidor.
+       Funciona cuando hay Resend o un webhook configurado. */
     try {
       const r = await fetch("/api/lead", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nombre: datos.nombre,
-          empresa: datos.empresa,
-          email: datos.email,
-          telefono: datos.tel,
-          tipoNegocio,
-          departamento,
-          autoridad,
-          nivelRiesgo,
-          riesgos,
-        }),
+        body: JSON.stringify(payload),
       });
-
       const res = await r.json();
-
-      if (!r.ok || !res.ok) {
-        setEstado("form");
-        return setError(
-          "No pudimos registrar su solicitud. Escríbanos por WhatsApp al 311 660 8217."
-        );
+      if (r.ok && res.ok) {
+        entregado = true;
+        correoAlProspecto = Boolean(res.correoEnviado);
       }
-
-      setCorreoEnviado(Boolean(res.correoEnviado));
-      setEstado("listo");
     } catch {
+      /* Se continúa con el respaldo */
+    }
+
+    /* 2. Respaldo desde el navegador.
+       Los servicios de formularios rechazan peticiones de servidor,
+       pero aceptan las del navegador del usuario. */
+    if (!entregado && WEB3FORMS) {
+      try {
+        const r = await fetch("https://api.web3forms.com/submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({
+            access_key: WEB3FORMS,
+            subject: `ECOCHECK · ${datos.nombre} · riesgo ${nivelRiesgo}`,
+            from_name: "ECOCHECK — SOSING",
+            Nombre: datos.nombre,
+            Empresa: datos.empresa || "—",
+            Correo: datos.email,
+            Celular: datos.tel || "—",
+            Actividad: tipoNegocio || "—",
+            Departamento: departamento || "—",
+            Autoridad: autoridad || "—",
+            Riesgo: nivelRiesgo || "—",
+            Obligaciones: riesgos.join(" | ") || "—",
+          }),
+        });
+        const j = await r.json().catch(() => null);
+        if (r.ok && j?.success) entregado = true;
+      } catch {
+        /* Sin canales disponibles */
+      }
+    }
+
+    if (!entregado) {
       setEstado("form");
-      setError(
-        "Hubo un problema de conexión. Escríbanos por WhatsApp al 311 660 8217."
+      return setError(
+        "No pudimos registrar su solicitud. Escríbanos por WhatsApp al 311 660 8217."
       );
     }
+
+    setCorreoEnviado(correoAlProspecto);
+    setEstado("listo");
   };
 
   if (estado === "listo") {
