@@ -369,9 +369,16 @@ export async function POST(req: NextRequest) {
         canales: {
           resend: RESEND_KEY ? "configurado" : "no configurado",
           webhook: WEBHOOK ? "configurado" : "no configurado",
-          web3forms: WEB3FORMS ? "configurado" : "no configurado",
+          web3forms: WEB3FORMS
+            ? `configurado (${WEB3FORMS.length} caracteres)`
+            : "no configurado",
           formsubmit: "último recurso, poco confiable desde servidor",
         },
+        /* Detalle del fallo, sin exponer credenciales */
+        detalle: errores.map((e) =>
+          e.replace(WEB3FORMS || "###", "[clave]")
+           .replace(RESEND_KEY || "###", "[clave]")
+        ),
       },
       { status: 502 }
     );
