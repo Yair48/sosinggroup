@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import {
+  cotizar, mensajeCotizacion, SUSCRIPCION, pesos as $,
+} from "@/lib/ecocheck-cotizacion";
+import {
   clasificarGeneradorRespel, explicarClasificacion,
   type RegistroMensual, type ResultadoClasificacion,
 } from "@/lib/ecocheck-motor-respel";
@@ -28,13 +31,14 @@ type Props = {
   registros: RegistroMensual[];
   generaACU: boolean;
   destinoVertimiento: string;
+  nivelRiesgo?: string;
 };
 
 const C = {
   tinta: "#16211B", verde: "#1F5C38", mint: "#9FD9B6",
   hueso: "#F4F6F2", linea: "#DDE3DC", gris: "#68756D",
   ambar: "#B4872F", ambarFondo: "#FBF3E2",
-  rojo: "#A8402C", verdeFondo: "#EDF4EF", morado: "#6B4C8A",
+  rojo: "#A8402C", verdeFondo: "#EDF4EF", morado: "#6B4C8A", grisClaro: "#8A9188",
 };
 
 export default function ResultadoAccionable(p: Props) {
@@ -42,6 +46,7 @@ export default function ResultadoAccionable(p: Props) {
   const [verMetodo, setVerMetodo] = useState(false);
 
   const aut = datosAutoridad(p.autoridad);
+  const nivelRiesgoTexto = p.nivelRiesgo || "MEDIO";
 
   /* Con bitácora se usa el motor real. Sin ella, el puente declarativo. */
   const usaMotor = p.generaRespel && p.registros.length > 0;
@@ -285,6 +290,129 @@ export default function ResultadoAccionable(p: Props) {
         <Bloque titulo="Para el mediano plazo" acciones={medio}
           abierta={abierta} setAbierta={setAbierta} />
       )}
+
+      {/* ══ Cotización ══ */}
+      {(() => {
+        const cot = cotizar(obligaciones.map((o) => o.id), nivelRiesgoTexto);
+        if (!cot) return null;
+
+        const wa = `https://wa.me/573116608217?text=${encodeURIComponent(
+          mensajeCotizacion(cot, {
+            tipoNegocio: p.departamento,
+            departamento: p.departamento,
+            nivelRiesgo: nivelRiesgoTexto,
+          })
+        )}`;
+
+        return (
+          <div style={{
+            background: "#fff", border: `2px solid ${C.verde}`,
+            borderRadius: 12, overflow: "hidden",
+          }}>
+            <div style={{ background: C.verde, padding: "16px 20px", color: "#fff" }}>
+              <div style={{ fontSize: 12, color: C.mint, marginBottom: 3 }}>
+                Nosotros lo resolvemos
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.35 }}>
+                {cot.mensaje}
+              </div>
+            </div>
+
+            <div style={{ padding: "18px 20px" }}>
+              {cot.lineas.map((l) => (
+                <div key={l.servicio.id} style={{
+                  paddingBottom: 16, marginBottom: 16,
+                  borderBottom: `1px solid ${C.hueso}`,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between",
+                                gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.tinta, flex: 1, minWidth: 180 }}>
+                      {l.servicio.nombre}
+                    </div>
+                    <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <div style={{ fontSize: 11.5, color: C.gris }}>desde</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: C.verde }}>
+                        {$(l.servicio.desde)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <p style={{ fontSize: 13.5, color: C.gris, lineHeight: 1.6, margin: "0 0 10px" }}>
+                    {l.servicio.descripcion}
+                  </p>
+
+                  <div style={{ display: "grid", gap: 4, marginBottom: 8 }}>
+                    {l.servicio.incluye.map((i) => (
+                      <div key={i} style={{ fontSize: 13, color: C.gris, display: "flex", gap: 7 }}>
+                        <span style={{ color: C.verde, fontWeight: 700 }}>✓</span>
+                        {i}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ fontSize: 12.5, color: C.grisClaro }}>
+                    Entrega: {l.servicio.plazo}
+                  </div>
+                </div>
+              ))}
+
+              {/* Total */}
+              <div style={{
+                background: C.hueso, borderRadius: 8, padding: "14px 16px",
+                marginBottom: 16,
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between",
+                              alignItems: "baseline", marginBottom: 4 }}>
+                  <span style={{ fontSize: 14, color: C.gris }}>
+                    {cot.lineas.length === 1 ? "Valor" : `${cot.lineas.length} servicios, desde`}
+                  </span>
+                  <span style={{ fontSize: 24, fontWeight: 700, color: C.verde }}>
+                    {$(cot.desde)}
+                  </span>
+                </div>
+                <div style={{ fontSize: 12.5, color: C.gris, lineHeight: 1.55 }}>
+                  Valor de referencia. El alcance y el precio definitivo se confirman
+                  tras revisar su caso. Sin costo por cotizar.
+                </div>
+              </div>
+
+              <a href={wa} target="_blank" rel="noopener noreferrer"
+                style={{
+                  display: "block", background: "#25D366", color: "#fff",
+                  padding: "15px", borderRadius: 8, textAlign: "center",
+                  fontSize: 15.5, fontWeight: 700, textDecoration: "none",
+                  marginBottom: 10,
+                }}>
+                Solicitar cotización por WhatsApp
+              </a>
+
+              <p style={{ fontSize: 12.5, color: C.grisClaro, textAlign: "center", margin: 0 }}>
+                Le responde un ingeniero, no un contestador automático
+              </p>
+
+              {/* Suscripción */}
+              {cot.incluyeSuscripcion && (
+                <div style={{
+                  marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.hueso}`,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between",
+                                gap: 10, alignItems: "baseline", marginBottom: 6 }}>
+                    <div style={{ fontSize: 14.5, fontWeight: 700, color: C.tinta }}>
+                      {SUSCRIPCION.nombre}
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: C.verde, whiteSpace: "nowrap" }}>
+                      {$(SUSCRIPCION.desde)}<span style={{ fontSize: 12, fontWeight: 400 }}>/mes</span>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: 13, color: C.gris, lineHeight: 1.55, margin: 0 }}>
+                    {SUSCRIPCION.descripcion}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ══ Leyenda ══ */}
       <div style={{ background: C.hueso, borderRadius: 12, padding: "16px 20px" }}>

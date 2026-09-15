@@ -379,6 +379,7 @@ export default function EcocheckSection() {
                     registros={registros}
                     generaACU={answers["q2"] === "si"}
                     destinoVertimiento={answers["q3"] || ""}
+                    nivelRiesgo={level === "rojo" ? "ALTO" : level === "amarillo" ? "MEDIO" : "BAJO"}
                   />
                 </div>
 
